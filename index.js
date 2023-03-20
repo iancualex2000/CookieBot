@@ -8,6 +8,16 @@ const puppeteer = require("puppeteer");
         await page.waitForNetworkIdle()
     ]);
 
+    const checkIfMillion = async () => {
+        const cookiesTitleElement = (await page.$x("//div[@id='cookies']"))[0];
+        const million = await page.evaluate((elem) => {
+            return elem.innerText.replaceAll("\n", " ").split(" ")[1];
+        }, cookiesTitleElement);
+        if(million === "million"){
+            return true;
+        }
+    }
+
     const getCookies = async () => {
         const getNumOfCookies = async () => {
             const cookiesTitleElement = (await page.$x("//div[@id='cookies']"))[0];
@@ -19,9 +29,7 @@ const puppeteer = require("puppeteer");
 
        
 
-        const cookiesNumber = getNumOfCookies().then(numOfCookies => {
-            return numOfCookies;
-        });
+        const cookiesNumber = await getNumOfCookies();
         const numberOfCookiesToFloat = parseFloat(await cookiesNumber);
         console.log("Cookies: "+numberOfCookiesToFloat);
         return numberOfCookiesToFloat;
@@ -29,6 +37,7 @@ const puppeteer = require("puppeteer");
     }
 
     const getProductPrices = async (i) => {
+        const check = await checkIfMillion();
         const getPriceValue = async () => {
             const productPrice = (await page.$x(`//span[@id='productPrice${i}']`))[0];
             if (productPrice) {
@@ -36,6 +45,11 @@ const puppeteer = require("puppeteer");
                     return elem.innerText.split(' ')[0];
                 }, productPrice);
                 const productPriceToFloat = parseFloat(productPriceValue.replaceAll(",", ""));
+                if(check === true){
+                    const productPriceIfMillion = productPriceToFloat/1000000;
+                    console.log("Product price: "+productPriceIfMillion)
+                    return productPriceIfMillion;
+                }
                 return productPriceToFloat;
             }
             else {
@@ -50,6 +64,7 @@ const puppeteer = require("puppeteer");
     } 
 
     const getUpgradePrices = async (i) =>{
+        const check = await checkIfMillion();
         const getPriceValue = async () => {
             await page.hover(`#upgrade${i}`);
             const tooltipCrate = (await page.$x("//div[@id='tooltipCrate']//span[@class='price']"))[0];
@@ -58,6 +73,11 @@ const puppeteer = require("puppeteer");
                     return elem.innerText.split(' ')[0];
                 }, tooltipCrate);
                 const upgradePriceToFloat = parseFloat(upgradePrice.replaceAll(',',''));
+                if(check === true){
+                    const upgradePriceIfMillion = upgradePriceToFloat/1000000;
+                    console.log('Upgrade Price: '+upgradePriceIfMillion);
+                    return upgradePriceIfMillion;
+                }
                 console.log('Upgrade Price: '+upgradePriceToFloat);
                 return upgradePriceToFloat;
             }else{
@@ -66,9 +86,7 @@ const puppeteer = require("puppeteer");
             }
         }
 
-        const priceNumber = getPriceValue().then(priceNumber => {
-            return priceNumber;
-        });
+        const priceNumber = await getPriceValue();
 
         return priceNumber;
     }
@@ -86,22 +104,11 @@ const puppeteer = require("puppeteer");
                 return productLevelToInt;
             }
         }
-        const productLevel = getProductLevelValue().then(productLevel => {
-            return productLevel;
-        });
+        const productLevel = await getProductLevelValue();
         return productLevel;
     }
 
-    const checkIfMillion = async () => {
-        const cookiesTitleElement = (await page.$x("//div[@id='cookies']"))[0];
-        const million = await page.evaluate((elem) => {
-            return elem.innerText.replaceAll("\n", " ").split(" ")[1];
-        }, cookiesTitleElement);
-        console.log(million);
-        if(million === "million"){
-            return true;
-        }
-    }
+ 
 
   
     const buyStuff = async () => {
@@ -113,23 +120,11 @@ const puppeteer = require("puppeteer");
                 for(let i=0;i<checkUpgrades.length;i++){
                    const upgradePrice = await getUpgradePrices(i);
                    const cookies = await getCookies();
-                   const check = await checkIfMillion();
-                   if(checkIfMillion === true){
-                        const newUpgradePrice = upgradePrice/1000000;
-                        console.log(newUpgradePrice);
-                        if(cookies>=newUpgradePrice){
-                            const buyUpgrade = async () => {await page.click(`#upgrade${i}`)};
-                            await buyUpgrade();
-                            console.log("Upgrade bought");
-                        }
-                    }else{
                         if(cookies>=upgradePrice){
                             const buyUpgrade = async () => {await page.click(`#upgrade${i}`)};
                             await buyUpgrade();
                             console.log("Upgrade bought");
                         }
-                    }
-                    
                 }
            
             
@@ -137,24 +132,35 @@ const puppeteer = require("puppeteer");
             let lowestLevelProductIndex = 0;
             let lowestLevel = Number.MAX_SAFE_INTEGER;
             const buyProduct = async (index) => {await page.click(`#product${index}`, {delay: 10})};
-            const cookies = await getCookies();
-            
+            let cookies = await getCookies();
+            let isPriorityProduct = false;
                 for(let i = 0;i<checkProductsUnlocked.length;i++){
                     const priceNumbers = await getProductPrices(i);
                     const productLevels = await getProductLevels(i);
-                    if(cookies>=priceNumbers){
-                    
-                        if(productLevels === ''){
-                            await buyProduct(i);
-                            console.log("Nan Producted buyed");
 
-                        }else if(productLevels !== '' && productLevels < lowestLevel){
-                            lowestLevel = productLevels;
-                            lowestLevelProductIndex = i;
-                            await buyProduct(lowestLevelProductIndex);
+                    if(productLevels === ''){
+                        isPriorityProduct = true;
+                        if(cookies >= priceNumbers){
+                            await buyProduct(i);
+                            console.log("Product with priority bought");
+                            cookies = await getCookies();
+                        }else{
+                            console.log("Not enough cookies for this product");
                         }
                     }
+
+                    if(!isPriorityProduct && productLevels!=='' && productLevels < lowestLevel){
+                        lowestLevel = productLevels;
+                        lowestLevelProductIndex = i;
+                    }
                     
+                }
+
+                if(!isPriorityProduct && cookies >= await getProductPrices(lowestLevelProductIndex)){
+                    await buyProduct(lowestLevelProductIndex);
+                    console.log("Product with lowest level bought");
+                }else if(!isPriorityProduct){
+                    console.log("Not Enough cookies for the lowest level product")
                 }
             
             
