@@ -149,14 +149,14 @@ const puppeteer = require("puppeteer");
                         }
                     }
 
-                    if(!isPriorityProduct && productLevels!=='' && productLevels < lowestLevel){
+                    if(!isPriorityProduct && productLevels!=='' && productLevels < lowestLevel ){
                         lowestLevel = productLevels;
                         lowestLevelProductIndex = i;
                     }
                     
                 }
-
                 if(!isPriorityProduct && cookies >= await getProductPrices(lowestLevelProductIndex)){
+                    
                     await buyProduct(lowestLevelProductIndex);
                     console.log("Product with lowest level bought");
                 }else if(!isPriorityProduct){
